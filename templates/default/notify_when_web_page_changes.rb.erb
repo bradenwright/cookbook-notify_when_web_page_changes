@@ -1,0 +1,149 @@
+#!<%= @ruby_path %>
+
+
+###################################################################################################
+################################ HOW TO USE #######################################################
+###################################################################################################
+#
+# 1) Setup google api, download client_id.json to same dir as this script
+# 2) Change any global variables
+# 3) run script: ./notify_when_web_page_changes.rb <url>
+#          e.g.: ./notify_when_web_page_chnages.rb https://www.google.com/
+# 4) When script runs for first time you will need to follow url to allow access, and paste key into terminal
+
+###################################################################################################
+##################################### TODO ########################################################
+###################################################################################################
+#TODO: 1) test launchy
+#TODO: 2) option to email link to generate code (maybe needed if no gui where script is run)
+#TODO: 3) Says expired, even after refresh!
+
+###################################################################################################
+############################## INCLUDES ###########################################################
+###################################################################################################
+
+# open url
+require 'open-uri'
+# Create message
+require 'rmail'
+# Gmail
+require 'google/apis/gmail_v1'
+require 'googleauth/stores/file_token_store'
+
+###################################################################################################
+############################ GLOBALS ##############################################################
+###################################################################################################
+
+APPLICATION_NAME = 'notify-when-web-page-changes'
+LOG_FILE = 'notify_when_web_page_changes.log'
+URL = ARGV[0]
+# http://www.rubydoc.info/github/google/google-api-ruby-client/Google/Apis/GmailV1
+SCOPE = Google::Apis::GmailV1::AUTH_GMAIL_SEND
+OOB_URI = 'urn:ietf:wg:oauth:2.0:oob'
+SLEEP_LOOP=60
+SLEEP_AFTER_NOTIFICATION=600
+EMAIL_FROM = ENV['EMAIL_FROM']
+EMAIL_TO = ENV['EMAIL_TO']
+EMAIL_TO_SMS = ENV['EMAIL_TO_SMS']
+EMAIL_SUBJECT = "UPDATE TO #{URL}"
+EMAIL_BODY = "#{URL} has been updated!" # The content is now:\n #{opts[:page_content]}"
+
+
+###################################################################################################
+############################### METHODS ###########################################################
+###################################################################################################
+
+def check_web_page
+  raise 'notify_when_web_page_changes needs a url to monitor, please pass a url as an argument' if !URL
+  %w{ EMAIL_FROM EMAIL_TO EMAIL_TO_SMS }.each do |required_var|
+    raise "#{required_var} is a required variable.  Please either set a bash env var: #{} or manually set the variable at the top of the script"
+  end
+
+  loop do
+    authorize
+
+    prev_content = nil
+    begin
+      cur_content = open(URL).read
+    rescue
+      # In case internet goes down
+      cur_content = prev_content
+    end
+
+    prev_content = cur_content if !prev_content
+
+    if !prev_content == cur_content
+      puts "#{Time.now} Site Changed, Sending Email!"
+      send_email({ :to => EMAIL_TO_SMS })
+      puts 'Sent SMS!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+      send_email({ :page_content => cur_content })
+      puts 'Sent Email!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+      sleep SLEEP_AFTER_NOTIFICATION
+    else
+      puts "#{Time.now} No Site Changes"
+    end
+
+    prev_content = cur_content
+    sleep SLEEP_LOOP
+  end
+end
+
+def authorize
+  # https://github.com/google/google-auth-library-ruby
+  client_id = Google::Auth::ClientId.from_file('client_id.json')
+  token_store = Google::Auth::Stores::FileTokenStore.new(
+    :file => 'tokens.yaml')
+  authorizer = Google::Auth::UserAuthorizer.new(client_id, SCOPE, token_store)
+
+  credentials = authorizer.get_credentials(EMAIL_FROM)
+  if credentials.nil?
+    url = authorizer.get_authorization_url(base_url: OOB_URI )
+# https://developers.google.com/api-client-library/ruby/auth/installed-app
+#    auth_uri = authorizer.authorization_uri.to_s
+#    require 'launchy
+#    Launchy.open(auth_uri)
+
+    puts "Open #{url} in your browser and enter the resulting code:"
+    code = $stdin.gets
+    credentials = authorizer.get_and_store_credentials_from_code(
+      user_id: EMAIL_FROM, code: code, base_url: OOB_URI)
+  end
+
+  if credentials.expired?
+    puts 'Expired credentials, refreshing'
+    credentials.refresh!
+  end
+
+  return credentials
+end
+
+def init_gmail_api
+  service = Google::Apis::GmailV1::GmailService.new
+  service.client_options.application_name = APPLICATION_NAME
+  service.authorization = authorize
+
+  return service
+end
+
+def send_email(opts={})
+  # https://github.com/google/google-api-ruby-client/blob/master/samples/cli/lib/samples/gmail.rb
+  message = RMail::Message.new
+  message.header['To'] = opts[:to] || EMAIL_TO
+  message.header['From'] = opts[:from] || EMAIL_FROM
+  message.header['Subject'] = opts[:subject] || EMAIL_SUBJECT
+  message.body = opts[:body] || EMAIL_BODY
+
+  gmail_service = init_gmail_api
+
+  gmail_service.send_user_message('me',
+    upload_source: StringIO.new(message.to_s),
+    content_type: 'message/rfc822')
+end
+
+###################################################################################################
+###################################### Main #######################################################
+###################################################################################################
+
+init_gmail_api
+check_web_page
+

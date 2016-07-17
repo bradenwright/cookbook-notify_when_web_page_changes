@@ -1,0 +1,10 @@
+name             'notify_when_web_page_changes'
+maintainer       'YOUR_NAME'
+maintainer_email 'YOUR_EMAIL'
+license          'All rights reserved'
+description      'Installs/Configures notify_when_web_page_changes'
+long_description 'Installs/Configures notify_when_web_page_changes'
+version          '0.1.0'
+
+depends 'apt'
+depends 'rbenv'

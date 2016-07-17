@@ -1,0 +1,35 @@
+---
+driver:
+  name: lxd_cli
+  image_name: ubuntu-14.04-static-ip
+  domain_name: bertabox.com
+  config:
+    limits.memory: 1GB
+    limits.cpu: 1
+  ip_gateway: 10.100.0.1
+  lxd_proxy_install: true
+
+provisioner:
+  name: chef_zero
+  require_chef_omnibus: true
+#  http_proxy: http://10.100.0.5:8123
+#  https_proxy: https://10.100.0.5:8123
+#  chef_omnibus_url: http://www.chef.io/chef/install.sh
+
+transport:
+  name: sftp
+  ssh_key: ~/.ssh/id_rsa
+
+verifier:
+  name: inspec
+
+platforms:
+- name: ubuntu-14.04
+
+suites:
+- name: notify_when_web_page_changes
+  driver_config:
+    ipv4: 10.100.0.99/24
+  run_list:
+  - recipe[notify_when_web_page_changes]
+
