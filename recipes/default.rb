@@ -23,7 +23,7 @@ rbenv_ruby ruby_version do
   global true
 end
 
-%w{ googleauth google-api-client gmail-api-ruby rmail launchy }.each do |gem|
+%w{ googleauth google-api-client gmail-api-ruby rmail zaru launchy }.each do |gem|
   rbenv_gem gem do
     ruby_version ruby_version
   end

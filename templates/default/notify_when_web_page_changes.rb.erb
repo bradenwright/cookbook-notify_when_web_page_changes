@@ -1,6 +1,5 @@
 #!<%= @ruby_path %>
 
-
 ###################################################################################################
 ################################ HOW TO USE #######################################################
 ###################################################################################################
@@ -22,29 +21,31 @@
 ############################## INCLUDES ###########################################################
 ###################################################################################################
 
-# open url
-require 'open-uri'
-# Create message
-require 'rmail'
-# Gmail
-require 'google/apis/gmail_v1'
-require 'googleauth/stores/file_token_store'
+require 'zaru' # for sanitize filename
+require 'open-uri' # open url
+require 'rmail' # Create message
+require 'google/apis/gmail_v1' # Gmail
+require 'googleauth/stores/file_token_store' #Gmail auth/tokens
 
 ###################################################################################################
 ############################ GLOBALS ##############################################################
 ###################################################################################################
 
+def missing_var(var)
+  raise "#{var} is a required variable.  Please either set a bash env var: #{var} or manually set the variable at the top of the script"
+end
+
 APPLICATION_NAME = 'notify-when-web-page-changes'
-LOG_FILE = 'notify_when_web_page_changes.log'
-URL = ARGV[0]
+URL = ARGV[0] || ( raise 'URL is require to be passed into notify_when_web_page_changes.rb as an argument. E.g. `./notify_when_web_page_changes.rb https://www.google.com`')
+LOGGER = Logger.new( Zaru.sanitize! "nwwpc-#{URL}.log".gsub(/https?/,'') )
 # http://www.rubydoc.info/github/google/google-api-ruby-client/Google/Apis/GmailV1
 SCOPE = Google::Apis::GmailV1::AUTH_GMAIL_SEND
 OOB_URI = 'urn:ietf:wg:oauth:2.0:oob'
 SLEEP_LOOP=60
 SLEEP_AFTER_NOTIFICATION=600
-EMAIL_FROM = ENV['EMAIL_FROM']
-EMAIL_TO = ENV['EMAIL_TO']
-EMAIL_TO_SMS = ENV['EMAIL_TO_SMS']
+EMAIL_FROM = ENV['EMAIL_FROM'] || missing_var('EMAIL_FROM')
+EMAIL_TO = ENV['EMAIL_TO'] || missing_var('EMAIL_TO')
+EMAIL_TO_SMS = ENV['EMAIL_TO_SMS'] || missing_var('EMAIL_TO_SMS')
 EMAIL_SUBJECT = "UPDATE TO #{URL}"
 EMAIL_BODY = "#{URL} has been updated!" # The content is now:\n #{opts[:page_content]}"
 
@@ -53,12 +54,15 @@ EMAIL_BODY = "#{URL} has been updated!" # The content is now:\n #{opts[:page_con
 ############################### METHODS ###########################################################
 ###################################################################################################
 
-def check_web_page
+def check_vars_before_running
   raise 'notify_when_web_page_changes needs a url to monitor, please pass a url as an argument' if !URL
-  %w{ EMAIL_FROM EMAIL_TO EMAIL_TO_SMS }.each do |required_var|
-    raise "#{required_var} is a required variable.  Please either set a bash env var: #{} or manually set the variable at the top of the script"
-  end
 
+  raise "EMAIL_FROM is a required variable.  Please either set a bash env var: EMAIL_FROM or manually set the variable at the top of the script" if !EMAIL_FROM
+  raise "EMAIL_FROM is a required variable.  Please either set a bash env var: EMAIL_FROM or manually set the variable at the top of the script" if !EMAIL_TO
+  raise "EMAIL_FROM is a required variable.  Please either set a bash env var: EMAIL_FROM or manually set the variable at the top of the script" if !EMAIL_TO
+end
+
+def check_web_page
   loop do
     authorize
 
@@ -73,14 +77,14 @@ def check_web_page
     prev_content = cur_content if !prev_content
 
     if !prev_content == cur_content
-      puts "#{Time.now} Site Changed, Sending Email!"
+      LOGGER.info "Site Changed, Sending Email!"
       send_email({ :to => EMAIL_TO_SMS })
-      puts 'Sent SMS!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+      LOGGER.info 'Sent SMS!!!!!!!!!!!!!!!!!!!!!!!!!!!'
       send_email({ :page_content => cur_content })
-      puts 'Sent Email!!!!!!!!!!!!!!!!!!!!!!!!!!!'
+      LOGGER.info 'Sent Email!!!!!!!!!!!!!!!!!!!!!!!!!!!'
       sleep SLEEP_AFTER_NOTIFICATION
     else
-      puts "#{Time.now} No Site Changes"
+      LOGGER.info "No Site Changes"
     end
 
     prev_content = cur_content
@@ -103,14 +107,14 @@ def authorize
 #    require 'launchy
 #    Launchy.open(auth_uri)
 
-    puts "Open #{url} in your browser and enter the resulting code:"
+    LOGGER.info "Open #{url} in your browser and enter the resulting code:"
     code = $stdin.gets
     credentials = authorizer.get_and_store_credentials_from_code(
       user_id: EMAIL_FROM, code: code, base_url: OOB_URI)
   end
 
   if credentials.expired?
-    puts 'Expired credentials, refreshing'
+    LOGGER.info 'Expired credentials, refreshing'
     credentials.refresh!
   end
 
