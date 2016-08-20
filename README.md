@@ -25,14 +25,14 @@ TODO: List your supported platforms.
 
 ## Usage
 
-### notify_when_web_page_changes::default
+### notify_when_web_page_changes
 
 Include `notify_when_web_page_changes` in your node's `run_list`:
 
 ```json
 {
   "run_list": [
-    "recipe[notify_when_web_page_changes::default]"
+    "recipe[notify_when_web_page_changes]"
   ]
 }
 ```
